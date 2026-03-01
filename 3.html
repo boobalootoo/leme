@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leme | Group Coordinator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior-y: contain;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        #map { 
+            height: 400px; 
+            border-radius: 28px; 
+            z-index: 10; 
+            border: 4px solid white; 
+            box-shadow: 0 15px 35px -5px rgba(0,0,0,0.1); 
+            transition: height 0.3s ease, border-color 0.3s ease;
+        }
+
+        .alt-msg { 
+            font-size: 11px; 
+            padding: 10px 14px; 
+            background: #f8fafc; 
+            border-radius: 14px; 
+            margin-top: 8px; 
+            border-left: 4px solid #6366f1; 
+            color: #334155; 
+            line-height: 1.5;
+        }
+
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .search-container { 
+            position: absolute; 
+            top: 16px; 
+            left: 16px; 
+            right: 16px; 
+            z-index: 1000; 
+        }
+
+        .toast-active { transform: translate(-50%, 0); opacity: 1; }
+        .toast-hidden { transform: translate(-50%, -100px); opacity: 0; }
+
+        .chat-scroll::-webkit-scrollbar { width: 4px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+        .input-focus:focus { 
+            background: white; 
+            box-shadow: 0 0 0 2px #6366f1; 
+        }
+
+        /* =========================================
+           THEME ENGINE (Persistent UI Overrides)
+           ========================================= */
+
+        /* --- DARK MODE --- */
+        [data-theme="dark"] { background: #0f172a; color: #f1f5f9; }
+        [data-theme="dark"] .bg-slate-50 { background: #0f172a !important; }
+        [data-theme="dark"] .bg-white { background: #1e293b !important; border-color: #334155 !important; color: #f8fafc !important; }
+        [data-theme="dark"] .text-slate-900, [data-theme="dark"] .text-slate-800 { color: #f8fafc !important; }
+        [data-theme="dark"] .text-slate-600, [data-theme="dark"] .text-slate-500 { color: #cbd5e1 !important; }
+        [data-theme="dark"] .text-slate-400, [data-theme="dark"] .text-slate-300 { color: #94a3b8 !important; }
+        [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea { background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; }
+        [data-theme="dark"] .bg-slate-50\/50 { background: #0f172a !important; }
+        [data-theme="dark"] .border-slate-100 { border-color: #334155 !important; }
+        [data-theme="dark"] .shadow-sm, [data-theme="dark"] .shadow-md, [data-theme="dark"] .shadow-xl { box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important; }
+        [data-theme="dark"] .bg-indigo-600 { background: #6366f1 !important; }
+        [data-theme="dark"] .bg-indigo-50 { background: #312e81 !important; color: #a5b4fc !important; }
+        [data-theme="dark"] .text-indigo-600 { color: #818cf8 !important; }
+        [data-theme="dark"] .alt-msg { background: #0f172a !important; color: #cbd5e1 !important; border-left-color: #818cf8 !important; }
+        [data-theme="dark"] #map { border-color: #1e293b !important; }
+
+        /* --- NEO-BRUTALISM --- */
+        [data-theme="neo"] { background: #fef08a; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
+        [data-theme="neo"] .bg-white { background: #ffffff !important; border: 3px solid #000 !important; border-radius: 0 !important; box-shadow: 6px 6px 0px #000 !important; color: #000 !important; }
+        [data-theme="neo"] .rounded-[40px], [data-theme="neo"] .rounded-[36px], [data-theme="neo"] .rounded-2xl, [data-theme="neo"] .rounded-xl, [data-theme="neo"] .rounded-lg, [data-theme="neo"] .rounded-3xl { border-radius: 0 !important; }
+        [data-theme="neo"] .bg-indigo-600 { background: #ec4899 !important; border: 3px solid #000 !important; color: #000 !important; box-shadow: 4px 4px 0px #000 !important; }
+        [data-theme="neo"] .bg-slate-900 { background: #3b82f6 !important; border: 3px solid #000 !important; color: #000 !important; box-shadow: 4px 4px 0px #000 !important; }
+        [data-theme="neo"] button { transition: none !important; }
+        [data-theme="neo"] button:active { transform: translate(4px, 4px) !important; box-shadow: 0 0 0 #000 !important; }
+        [data-theme="neo"] input, [data-theme="neo"] select, [data-theme="neo"] textarea { border: 3px solid #000 !important; background: #fff !important; color: #000 !important; border-radius: 0 !important; box-shadow: 2px 2px 0px #000 !important;}
+        [data-theme="neo"] .text-indigo-600 { color: #ec4899 !important; font-weight: 900 !important; }
+        [data-theme="neo"] .bg-indigo-50 { background: #fce7f3 !important; border: 3px solid #000 !important; color: #000 !important; }
+        [data-theme="neo"] .bg-slate-50 { background: #fef08a !important; }
+        [data-theme="neo"] .text-slate-900, [data-theme="neo"] .text-slate-800, [data-theme="neo"] .text-slate-600, [data-theme="neo"] .text-slate-500, [data-theme="neo"] .text-slate-400, [data-theme="neo"] .text-slate-300 { color: #000 !important; }
+        [data-theme="neo"] #map { border: 4px solid #000 !important; border-radius: 0 !important; box-shadow: 6px 6px 0px #000 !important; }
+        [data-theme="neo"] .alt-msg { background: #fff !important; border: 3px solid #000 !important; color: #000 !important; box-shadow: 2px 2px 0px #000 !important; }
+        [data-theme="neo"] nav { border-bottom: 4px solid #000 !important; background: #fff !important; }
+
+        /* --- FOREST --- */
+        [data-theme="forest"] { background: #ecfdf5; }
+        [data-theme="forest"] .bg-indigo-600 { background: #059669 !important; }
+        [data-theme="forest"] .bg-slate-900 { background: #064e3b !important; }
+        [data-theme="forest"] .text-indigo-600 { color: #059669 !important; }
+        [data-theme="forest"] .bg-indigo-50 { background: #d1fae5 !important; color: #047857 !important; }
+        [data-theme="forest"] .bg-slate-50 { background: #f0fdf4 !important; }
+        [data-theme="forest"] .border-slate-100 { border-color: #a7f3d0 !important; }
+        [data-theme="forest"] .alt-msg { border-left-color: #059669 !important; background: #ecfdf5 !important; }
+    </style>
+</head>
+<body class="bg-slate-50 pb-20 text-slate-900">
+
+    <!-- Status Toast Notifications -->
+    <div id="statusToast" class="fixed top-24 left-1/2 -translate-x-1/2 z-[10001] transition-all duration-500 toast-hidden pointer-events-none">
+        <div class="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 border border-white/10">
+            <span id="toastIcon">ℹ️</span>
+            <span id="toastMsg">Syncing...</span>
+        </div>
+    </div>
+
+    <!-- Username Onboarding -->
+    <div id="userModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[9999] p-6">
+        <div class="bg-white p-8 rounded-[36px] shadow-2xl max-w-sm w-full text-center border border-slate-100">
+            <div class="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 text-2xl font-black rotate-3 shadow-lg">L</div>
+            <h2 class="text-2xl font-extrabold mb-2 tracking-tight">Welcome to Leme</h2>
+            <p class="text-slate-500 text-sm mb-8">Choose a name to start coordinating with your crew.</p>
+            <input type="text" id="usernameInput" placeholder="Enter your name" class="w-full p-4 bg-slate-50 border-none rounded-2xl mb-4 text-center outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-lg font-bold">
+            <button onclick="saveUsername()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-indigo-100 active:scale-95 transition-all">Start Planning</button>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="infoModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6">
+        <div class="bg-white p-8 rounded-[36px] shadow-2xl max-w-md w-full relative border border-slate-100">
+            <button onclick="toggleInfo()" class="absolute top-6 right-6 text-slate-300 hover:text-slate-600 text-xl p-2">✕</button>
+            <h2 class="text-2xl font-extrabold mb-6 tracking-tight text-slate-900 uppercase italic">How Leme Works</h2>
+            <div class="space-y-5 text-sm text-slate-600">
+                <div class="flex gap-3">
+                    <span class="bg-indigo-50 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-bold">1</span>
+                    <p><strong>Set a Spot:</strong> Search for a venue or tap the map. You can <strong>drag the pin</strong> to fine-tune or click <strong>Clear</strong> to remove it.</p>
+                </div>
+                <div class="flex gap-3">
+                    <span class="bg-indigo-50 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-bold">2</span>
+                    <p><strong>Post or Request:</strong> Share a specific event or use "Activity Request" to ask for suggestions from friends.</p>
+                </div>
+                <div class="flex gap-3">
+                    <span class="bg-indigo-50 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-bold">3</span>
+                    <p><strong>RSVP:</strong> Choose your interest level. Your status will update on the board instantly.</p>
+                </div>
+                <div class="flex gap-3">
+                    <span class="bg-indigo-50 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-bold">4</span>
+                    <p><strong>Navigate:</strong> Click "Get Directions" on any post to open the location in your phone's map app.</p>
+                </div>
+            </div>
+            <button onclick="toggleInfo()" class="w-full mt-8 bg-slate-100 py-4 rounded-2xl font-bold hover:bg-slate-200 transition-all text-slate-800">Got it!</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6">
+        <div class="bg-white p-8 rounded-[36px] shadow-2xl max-w-md w-full relative border border-slate-100">
+            <button onclick="toggleSettings()" class="absolute top-6 right-6 text-slate-300 hover:text-slate-600 text-xl p-2">✕</button>
+            <h2 class="text-2xl font-extrabold mb-6 tracking-tight text-slate-900">App Settings</h2>
+            
+            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Select Theme</h3>
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <button onclick="setTheme('default')" class="p-4 bg-slate-50 text-slate-700 rounded-2xl font-bold border-2 border-slate-200 hover:border-indigo-500 transition-all">Light (Default)</button>
+                <button onclick="setTheme('dark')" class="p-4 bg-slate-900 text-white rounded-2xl font-bold border-2 border-slate-900 hover:border-indigo-500 transition-all">Dark Mode</button>
+                <button onclick="setTheme('neo')" class="p-4 bg-[#fef08a] text-black rounded-2xl font-bold border-4 border-black shadow-[4px_4px_0_0_rgba(0,0,0,1)] hover:translate-y-1 hover:shadow-none transition-all" style="font-family: monospace;">Neo-Brutal</button>
+                <button onclick="setTheme('forest')" class="p-4 bg-[#ecfdf5] text-[#064e3b] rounded-2xl font-bold border-2 border-[#a7f3d0] hover:border-[#059669] transition-all">Forest</button>
+            </div>
+            
+            <button onclick="toggleSettings()" class="w-full mt-4 bg-slate-100 py-4 rounded-2xl font-bold hover:bg-slate-200 transition-all text-slate-800">Close</button>
+        </div>
+    </div>
+
+    <!-- Header Navigation -->
+    <nav class="px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 text-white w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm">L</div>
+            <h1 class="text-xl font-black text-slate-900 tracking-tighter">LEME</h1>
+            <button onclick="toggleInfo()" class="w-6 h-6 rounded-full border border-slate-200 text-slate-400 text-[10px] font-black flex items-center justify-center hover:bg-slate-100 transition-all">?</button>
+            <button onclick="toggleSettings()" class="w-6 h-6 rounded-full border border-slate-200 text-slate-400 text-[10px] font-black flex items-center justify-center hover:bg-slate-100 transition-all">⚙️</button>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="displayUser" class="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full uppercase tracking-wider"></span>
+        </div>
+    </nav>
+
+    <main class="max-w-xl mx-auto p-4 space-y-6">
+        
+        <!-- Interactive Map Selection -->
+        <div class="relative group">
+            <div class="search-container flex gap-2">
+                <input id="mapSearch" type="text" placeholder="Search address or venue..." class="flex-1 p-3.5 rounded-2xl shadow-xl border-none outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium">
+                <button onclick="searchLocation()" class="bg-indigo-600 text-white px-5 rounded-2xl shadow-xl font-bold text-sm active:scale-95 transition-all">Find</button>
+            </div>
+            <div id="map"></div>
+            <button onclick="locateMe()" class="absolute bottom-6 right-6 z-[1000] bg-white p-4 rounded-2xl shadow-xl border border-slate-100 text-indigo-600 active:scale-90 transition-all hover:bg-indigo-50" title="Find my location">
+                📍
+            </button>
+        </div>
+
+        <!-- Post Form Section -->
+        <section class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+            <div class="flex justify-between items-center mb-6 px-1">
+                <h3 class="font-extrabold text-slate-800 tracking-tight text-lg">Create a New Plan</h3>
+                <div id="locationStatus" class="hidden location-badge flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">📍 Pin Set</span>
+                    <button onclick="clearPin()" class="text-[10px] font-bold text-red-400 hover:text-red-600 underline">Clear</button>
+                </div>
+            </div>
+            
+            <div class="space-y-4">
+                <div id="addressPreview" class="hidden px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] text-slate-500 leading-relaxed italic">
+                    Detected: <span id="addressText" class="font-bold text-slate-700"></span>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-2">What's happening?</label>
+                    <input id="evName" type="text" placeholder="e.g. Saturday Picnic at the Park" class="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none input-focus transition-all text-sm font-semibold">
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-2">Type</label>
+                        <select id="evType" onchange="toggleExtraInputs()" class="w-full p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none input-focus appearance-none cursor-pointer transition-all">
+                            <option value="Event: One-time">📅 Specific Date</option>
+                            <option value="Event: Recurring">🔄 Recurring</option>
+                            <option value="Event: Anytime">✨ Anytime / Flex</option>
+                            <option value="Activity Request">🙋 Activity Request</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Conditional Input for Specific Date -->
+                <div id="dateInputContainer" class="space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-2">Select Date & Time</label>
+                    <input id="evDate" type="datetime-local" class="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none input-focus transition-all text-sm font-semibold">
+                </div>
+
+                <!-- Conditional Input for Recurring -->
+                <div id="recurringInputContainer" class="hidden space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-2">When does it recur?</label>
+                    <input id="evRecurrence" type="text" placeholder="e.g. Every Friday at 6pm" class="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none input-focus transition-all text-sm font-semibold">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-2">Details / Description</label>
+                    <textarea id="evDesc" placeholder="Criteria for requests, links, or extra info..." class="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-medium h-28 outline-none input-focus transition-all"></textarea>
+                </div>
+                
+                <button id="postBtn" onclick="postEvent()" class="w-full bg-slate-900 text-white py-5 rounded-3xl font-bold shadow-xl shadow-slate-200 hover:bg-indigo-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 text-sm">
+                    Post to Board
+                </button>
+            </div>
+        </section>
+
+        <!-- The Feed / Activity Board -->
+        <div id="feed" class="space-y-6">
+            <div class="flex justify-between items-center px-4">
+                <h2 class="text-sm font-black text-slate-400 uppercase tracking-widest italic">The Feed</h2>
+                <button onclick="loadEvents()" class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:underline transition-all">Refresh ↻</button>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="loading" class="py-20 flex flex-col items-center justify-center text-slate-300">
+                <div class="border-4 border-slate-100 border-t-indigo-600 rounded-full h-12 w-12 spin mb-4 shadow-sm"></div>
+                <p class="text-[10px] font-bold uppercase tracking-[0.2em]">Syncing with Board</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // SCRIPT CONFIGURATION
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwdOD4G5GHdvYYJUstaFTaqk6qTaU7GNQVSTU4TwIrj1uDcmoxmyg3SUbqBKoXNnmrDQQ/exec"; 
+        
+        let currentUser = localStorage.getItem('leme_user');
+        let selectedCoords = "";
+        let tempMarker = null;
+        let mapMarkers = [];
+        let detectedAddress = "";
+
+        // Map Setup
+        const map = L.map('map', { zoomControl: false }).setView([51.505, -0.09], 13);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        window.onload = () => {
+            // Apply Persistent Theme
+            const savedTheme = localStorage.getItem('leme_theme') || 'default';
+            document.body.setAttribute('data-theme', savedTheme);
+
+            if (!currentUser) {
+                document.getElementById('userModal').classList.remove('hidden');
+            } else {
+                document.getElementById('displayUser').innerText = currentUser;
+                loadEvents();
+            }
+        };
+
+        // UI & Theme Handlers
+        function setTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('leme_theme', theme);
+            showToast("Theme updated", "🎨");
+            setTimeout(() => toggleSettings(), 300);
+        }
+
+        function toggleSettings() { document.getElementById('settingsModal').classList.toggle('hidden'); }
+        function toggleInfo() { document.getElementById('infoModal').classList.toggle('hidden'); }
+
+        function showToast(msg, icon = "ℹ️") {
+            const toast = document.getElementById('statusToast');
+            document.getElementById('toastMsg').innerText = msg;
+            document.getElementById('toastIcon').innerText = icon;
+            toast.classList.replace('toast-hidden', 'toast-active');
+            setTimeout(() => toast.classList.replace('toast-active', 'toast-hidden'), 3000);
+        }
+        
+        function saveUsername() {
+            const val = document.getElementById('usernameInput').value.trim();
+            if (val) {
+                localStorage.setItem('leme_user', val);
+                location.reload();
+            }
+        }
+
+        // Form Logic
+        function toggleExtraInputs() {
+            const type = document.getElementById('evType').value;
+            const dateContainer = document.getElementById('dateInputContainer');
+            const recurringContainer = document.getElementById('recurringInputContainer');
+
+            dateContainer.classList.toggle('hidden', type !== 'Event: One-time');
+            recurringContainer.classList.toggle('hidden', type !== 'Event: Recurring');
+        }
+
+        // Location Management
+        function locateMe() {
+            map.locate({setView: true, maxZoom: 15});
+        }
+
+        map.on('locationfound', e => { updatePin(e.latlng); });
+        map.on('click', e => { updatePin(e.latlng); });
+
+        async function searchLocation() {
+            const query = document.getElementById('mapSearch').value;
+            if (!query) return;
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                if (data && data.length > 0) {
+                    const first = data[0];
+                    const latlng = { lat: parseFloat(first.lat), lng: parseFloat(first.lon) };
+                    map.setView(latlng, 16);
+                    updatePin(latlng, first.display_name);
+                } else {
+                    showToast("Location not found", "❌");
+                }
+            } catch (err) {
+                showToast("Search failed", "❌");
+            }
+        }
+
+        function clearPin() {
+            if (tempMarker) map.removeLayer(tempMarker);
+            tempMarker = null;
+            selectedCoords = "";
+            detectedAddress = "";
+            document.getElementById('locationStatus').classList.add('hidden');
+            document.getElementById('addressPreview').classList.add('hidden');
+            showToast("Location cleared", "🗑️");
+        }
+
+        function updatePin(latlng, addressName = "") {
+            selectedCoords = `${latlng.lat},${latlng.lng}`;
+            if (tempMarker) map.removeLayer(tempMarker);
+            
+            tempMarker = L.marker(latlng, { draggable: true }).addTo(map);
+            
+            tempMarker.on('dragend', function(event) {
+                const marker = event.target;
+                const pos = marker.getLatLng();
+                selectedCoords = `${pos.lat},${pos.lng}`;
+                reverseGeocode(pos.lat, pos.lng);
+            });
+
+            if (addressName) setAddressDisplay(addressName);
+            else reverseGeocode(latlng.lat, latlng.lng);
+            
+            document.getElementById('locationStatus').classList.remove('hidden');
+        }
+
+        async function reverseGeocode(lat, lng) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                const data = await res.json();
+                setAddressDisplay(data.display_name || "Custom Point");
+            } catch (e) {
+                setAddressDisplay("Custom Location Set");
+            }
+        }
+
+        function setAddressDisplay(text) {
+            detectedAddress = text;
+            document.getElementById('addressPreview').classList.remove('hidden');
+            document.getElementById('addressText').innerText = text;
+        }
+
+        // Data Management
+        async function postEvent() {
+            const btn = document.getElementById('postBtn');
+            const name = document.getElementById('evName').value.trim();
+            if(!name) { showToast("Plan needs a title!", "⚠️"); return; }
+            
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spin border-2 border-white/20 border-t-white rounded-full h-4 w-4 mr-2"></div> Syncing...`;
+
+            const type = document.getElementById('evType').value;
+            let extraInfo = "";
+            
+            if (type === 'Event: One-time') {
+                const d = document.getElementById('evDate').value;
+                if (d) extraInfo = `\n🗓️ Date: ${new Date(d).toLocaleString()}`;
+            } else if (type === 'Event: Recurring') {
+                const r = document.getElementById('evRecurrence').value;
+                if (r) extraInfo = `\n🔄 Recurring: ${r}`;
+            }
+
+            const finalDesc = document.getElementById('evDesc').value + 
+                             extraInfo +
+                             (detectedAddress ? `\n\n📍 Location: ${detectedAddress}` : "");
+
+            const payload = {
+                eventName: name,
+                type: type,
+                description: finalDesc,
+                coords: selectedCoords || "51.505,-0.09",
+                userName: currentUser
+            };
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+                showToast("Posted to board!", "✅");
+                setTimeout(() => location.reload(), 2000);
+            } catch (err) {
+                showToast("Post failed", "❌");
+                btn.disabled = false;
+                btn.innerText = "Post to Board";
+            }
+        }
+
+        async function vote(eventId, voteType) {
+            await fetch(SCRIPT_URL, {
+                method: "POST",
+                mode: 'no-cors',
+                body: JSON.stringify({ action: "vote", eventId, voteType, userName: currentUser })
+            });
+            showToast("Choice recorded", "🗳️");
+            setTimeout(() => loadEvents(), 1500);
+        }
+
+        async function submitAlt(eventId) {
+            const input = document.getElementById(`alt-in-${eventId}`);
+            if (!input.value.trim()) return;
+            await fetch(SCRIPT_URL, {
+                method: "POST",
+                mode: 'no-cors',
+                body: JSON.stringify({ action: "alt", eventId, suggestion: input.value, userName: currentUser })
+            });
+            input.value = "";
+            showToast("Sent suggestion", "💬");
+            setTimeout(() => loadEvents(), 1500);
+        }
+
+        function getDirections(coords) {
+            if (!coords || coords === "51.505,-0.09") {
+                showToast("No location pinned", "🗺️");
+                return;
+            }
+            const [lat, lng] = coords.split(',');
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+        }
+
+        async function loadEvents() {
+            document.getElementById('loading').style.display = 'flex';
+            try {
+                const res = await fetch(SCRIPT_URL);
+                const data = await res.json();
+                
+                mapMarkers.forEach(m => map.removeLayer(m));
+                mapMarkers = [];
+                const feed = document.getElementById('feed');
+                
+                while (feed.children.length > 2) feed.removeChild(feed.lastChild);
+
+                data.reverse().forEach(ev => {
+                    const hasValidLoc = ev.Coordinates && ev.Coordinates !== "51.505,-0.09";
+                    
+                    if(hasValidLoc) {
+                        const coords = ev.Coordinates.split(',');
+                        if(coords.length === 2) {
+                            const m = L.marker([parseFloat(coords[0]), parseFloat(coords[1])]).addTo(map).bindPopup(`<b>${ev.EventName}</b><br>By ${ev.UserName}`);
+                            mapMarkers.push(m);
+                        }
+                    }
+                    
+                    const chats = ev.Alternatives ? ev.Alternatives.split('|').map(a => `<div class="alt-msg">${a}</div>`).join('') : '';
+                    
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-8 rounded-[40px] shadow-sm border border-slate-100 transition-all hover:shadow-md hover:border-indigo-100 duration-300 mb-4";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="text-[9px] font-black ${ev.Type.includes('Request') ? 'text-pink-500 bg-pink-50' : 'text-indigo-600 bg-indigo-50'} px-2.5 py-1 rounded-xl uppercase tracking-widest">${ev.Type}</span>
+                            <span class="text-[9px] font-bold text-slate-300">By ${ev.UserName}</span>
+                        </div>
+                        <h4 class="font-extrabold text-slate-900 text-xl tracking-tight leading-tight">${ev.EventName}</h4>
+                        <p class="text-sm text-slate-500 mt-2 mb-6 leading-relaxed whitespace-pre-wrap">${ev.Description}</p>
+                        
+                        ${hasValidLoc ? `
+                        <button onclick="getDirections('${ev.Coordinates}')" class="w-full mb-6 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-bold tracking-[0.2em] uppercase shadow-lg shadow-slate-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                            <span>🚗 Get Directions</span>
+                        </button>` : ''}
+
+                        <!-- REVERTED TO 4 ORIGINAL OPTIONS (Stacked vertically for length) -->
+                        <div class="grid grid-cols-1 gap-2.5 mb-8">
+                            <button onclick="vote('${ev.ID}', 'yes')" class="text-[11px] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 active:scale-95 transition-all">I AM DEFINITELY GOING TO THIS</button>
+                            <button onclick="vote('${ev.ID}', 'maybe')" class="text-[11px] py-4 bg-slate-50 text-indigo-600 rounded-2xl font-black active:scale-95 transition-all">I'LL GO IF SOMEONE ELSE WANTS TO</button>
+                            <button onclick="vote('${ev.ID}', 'busy')" class="text-[11px] py-4 bg-slate-50 text-slate-500 rounded-2xl font-black active:scale-95 transition-all">I'M INTERESTED BUT NOT AVAILABLE THIS TIME</button>
+                            <button onclick="vote('${ev.ID}', 'no')" class="text-[11px] py-4 bg-slate-50 text-slate-300 rounded-2xl font-black active:scale-95 transition-all uppercase">This is not something I'm interested in</button>
+                        </div>
+
+                        <div class="space-y-3 mb-8 p-6 bg-slate-50/50 rounded-3xl text-[10px] border border-slate-100/50 font-bold uppercase tracking-wider">
+                            <div class="flex justify-between"><span>DEFINITELY GOING:</span> <span class="text-indigo-600">${ev.Definitely || '-'}</span></div>
+                            <div class="flex justify-between"><span>IF OTHERS WANT TO:</span> <span class="text-slate-500">${ev.Maybe || '-'}</span></div>
+                            <div class="flex justify-between"><span>INTERESTED / BUSY:</span> <span class="text-slate-400">${ev.Busy || '-'}</span></div>
+                            <div class="flex justify-between text-slate-300"><span>NOT INTERESTED:</span> <span>${ev.No || '-'}</span></div>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-6">
+                            <h5 class="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-3">Suggestions & Chat</h5>
+                            <div class="chat-scroll max-h-40 overflow-y-auto mb-5">
+                                ${chats || '<p class="text-[11px] text-slate-300 italic">No activity yet. Propose a time or place!</p>'}
+                            </div>
+                            <div class="flex gap-2">
+                                <input id="alt-in-${ev.ID}" type="text" placeholder="Type a message..." class="flex-1 text-xs p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-100 transition-all font-medium">
+                                <button onclick="submitAlt('${ev.ID}')" class="bg-indigo-600 text-white px-5 rounded-2xl font-bold active:scale-90 shadow-lg shadow-indigo-100">➔</button>
+                            </div>
+                        </div>
+                    `;
+                    feed.appendChild(card);
+                });
+            } catch (e) {
+                showToast("Syncing failed", "❌");
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
