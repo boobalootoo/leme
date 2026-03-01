@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leme</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 300px; border-radius: 12px; z-index: 1; }
+        .alt-tag { font-size: 10px; padding: 2px 6px; background: #f3f4f6; border-radius: 4px; display: block; margin-top: 4px; }
+    </style>
+</head>
+<body class="bg-gray-50 pb-20">
+
+    <div id="userModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4">
+        <div class="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full text-center">
+            <h2 class="text-xl font-bold mb-4">Welcome to Leme</h2>
+            <input type="text" id="usernameInput" placeholder="Username" class="w-full p-3 border rounded-xl mb-4 text-center outline-none focus:ring-2 focus:ring-indigo-500">
+            <button onclick="saveUsername()" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Join Hub</button>
+        </div>
+    </div>
+
+    <nav class="p-5 bg-white border-b flex justify-between items-center sticky top-0 z-50">
+        <h1 class="text-2xl font-black text-indigo-600 tracking-tighter">LEME</h1>
+        <span id="displayUser" class="text-xs font-medium bg-gray-100 px-3 py-1 rounded-full text-gray-600"></span>
+    </nav>
+
+    <main class="max-w-xl mx-auto p-4 space-y-6">
+        <div id="map"></div>
+
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <h3 class="font-bold mb-3">Post an Idea</h3>
+            <div class="space-y-3">
+                <input id="evName" type="text" placeholder="What's the plan?" class="w-full p-2 border-b outline-none focus:border-indigo-500 text-sm">
+                <select id="evType" class="w-full p-2 bg-gray-50 rounded-lg text-sm appearance-none">
+                    <option value="One-time">📅 Specific Date</option>
+                    <option value="Recurring">🔄 Recurring</option>
+                    <option value="Anytime">✨ Anytime / Flexible</option>
+                </select>
+                <textarea id="evDesc" placeholder="Extra info (times, criteria, links)..." class="w-full p-2 bg-gray-50 rounded-lg text-sm h-16"></textarea>
+                <button onclick="postEvent()" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition">Post to Leme</button>
+            </div>
+        </div>
+
+        <div id="feed" class="space-y-4">
+            <h2 class="text-lg font-bold text-gray-800">The Board</h2>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfKDFSy0PeKcjL7VxqhUNo2E3cZJBK8yKioeMhjXN8IMzI8zjonIsFxq-BmUniqIvEdw/exec"; 
+        let currentUser = localStorage.getItem('leme_user');
+        let selectedCoords = "51.505,-0.09";
+
+        window.onload = () => {
+            if (!currentUser) document.getElementById('userModal').classList.remove('hidden');
+            else {
+                document.getElementById('displayUser').innerText = currentUser;
+                loadEvents();
+            }
+        };
+
+        function saveUsername() {
+            const name = document.getElementById('usernameInput').value;
+            if (name.trim()) {
+                localStorage.setItem('leme_user', name);
+                location.reload();
+            }
+        }
+
+        const map = L.map('map').setView([51.505, -0.09], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        map.on('click', e => {
+            selectedCoords = `${e.latlng.lat},${e.latlng.lng}`;
+            L.clearLayers; 
+            L.marker(e.latlng).addTo(map);
+        });
+
+        async function postEvent() {
+            const data = {
+                eventName: document.getElementById('evName').value,
+                type: document.getElementById('evType').value,
+                description: document.getElementById('evDesc').value,
+                coords: selectedCoords,
+                userName: currentUser
+            };
+            await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(data) });
+            location.reload();
+        }
+
+        async function vote(eventId, voteType) {
+            await fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify({ action: "vote", eventId, voteType, userName: currentUser })
+            });
+            location.reload();
+        }
+
+        async function submitAlt(eventId) {
+            const input = document.getElementById(`alt-in-${eventId}`);
+            if (!input.value.trim()) return;
+            await fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify({ action: "alt", eventId, suggestion: input.value, userName: currentUser })
+            });
+            location.reload();
+        }
+
+        async function loadEvents() {
+            const response = await fetch(SCRIPT_URL);
+            const events = await response.json();
+            const feed = document.getElementById('feed');
+            
+            events.reverse().forEach(ev => {
+                if(ev.Coordinates && ev.Coordinates !== "51.505,-0.09") {
+                    const c = ev.Coordinates.split(',');
+                    L.marker([c[0], c[1]]).addTo(map).bindPopup(ev.EventName);
+                }
+
+                const altsHtml = ev.Alternatives ? ev.Alternatives.split('|').map(a => `<span class="alt-tag">${a}</span>`).join('') : '';
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-[10px] font-bold text-indigo-500 uppercase">${ev.Type}</span>
+                        <span class="text-[10px] text-gray-400">by ${ev.UserName}</span>
+                    </div>
+                    <h4 class="font-bold text-gray-900">${ev.EventName}</h4>
+                    <p class="text-sm text-gray-600 mb-4">${ev.Description}</p>
+                    
+                    <div class="grid grid-cols-3 gap-2 mb-4">
+                        <button onclick="vote('${ev.ID}', 'yes')" class="text-[10px] py-2 bg-green-50 text-green-700 rounded-lg font-bold">Going</button>
+                        <button onclick="vote('${ev.ID}', 'maybe')" class="text-[10px] py-2 bg-blue-50 text-blue-700 rounded-lg font-bold">Maybe</button>
+                        <button onclick="vote('${ev.ID}', 'no')" class="text-[10px] py-2 bg-gray-50 text-gray-600 rounded-lg font-bold">Pass</button>
+                    </div>
+
+                    <div class="text-[10px] space-y-1 mb-3 text-gray-500 border-t pt-2">
+                        <div><strong>Going:</strong> ${ev.Definitely || '-'}</div>
+                        <div><strong>Maybe:</strong> ${ev.Maybe || '-'}</div>
+                    </div>
+
+                    <div class="border-t pt-3">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-1">Alternatives / Discussion</p>
+                        ${altsHtml}
+                        <div class="flex mt-2 gap-2">
+                            <input id="alt-in-${ev.ID}" type="text" placeholder="Suggest something else..." class="flex-1 text-[11px] p-2 bg-gray-50 rounded-lg outline-none">
+                            <button onclick="submitAlt('${ev.ID}')" class="bg-indigo-600 text-white px-3 rounded-lg text-xs">➔</button>
+                        </div>
+                    </div>
+                `;
+                feed.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
